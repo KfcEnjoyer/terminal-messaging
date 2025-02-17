@@ -1,0 +1,187 @@
+package messaging
+
+import (
+	"fmt"
+	"net"
+	"net/http"
+	"net/rpc"
+)
+
+type NoReply bool
+
+type Server interface {
+	StartServer(port string) error
+	Register(username string, reply *string) error
+	GetUsers(args string, reply *[]string) error
+	SendMessage(msg Message, reply *NoReply) error
+	SayGlobally(msg Message, reply *NoReply) error
+	LogOut(username string, reply *string) error
+	ReadMessages(username string, reply *[]string) error
+	StopServer(args string, reply *NoReply) error
+}
+
+type ServerService struct {
+	Port     string
+	Users    []string
+	MessageQ map[string][]string
+	Stop     chan bool
+	Rooms    []Room
+}
+
+func StartServer(s *ServerService) {
+	if err := rpc.Register(s); err != nil {
+		fmt.Println(err)
+	}
+
+	rpc.HandleHTTP()
+
+	listen, err := net.Listen("tcp", s.Port)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	go http.Serve(listen, nil)
+}
+
+func (s *ServerService) Register(username string, reply *string) error {
+	*reply = fmt.Sprintf("Welcome to the server %s \n", username)
+
+	s.Users = append(s.Users, username)
+
+	for i := range s.MessageQ {
+		s.MessageQ[i] = append(s.MessageQ[i], fmt.Sprintf("User: %s joined the chat!", username))
+	}
+
+	s.MessageQ[username] = nil
+
+	fmt.Println("User " + username + " joined the chat")
+	fmt.Println(s.Users)
+
+	return nil
+}
+
+func (s *ServerService) GetUsers(args string, reply *[]string) error {
+	*reply = append(*reply, "List of active users: \n")
+
+	for i, user := range s.Users {
+		*reply = append(*reply, fmt.Sprintf("User %d: %s", i, user))
+	}
+
+	return nil
+}
+
+func (s *ServerService) SendMessage(msg Message, reply *NoReply) error {
+	target := msg.Target
+	from := msg.From
+	content := msg.Content
+
+	message := fmt.Sprintf("%s sent you: %s", from, content)
+
+	s.MessageQ[target] = append(s.MessageQ[target], message)
+
+	return nil
+}
+
+func (s *ServerService) SayGlobally(msg Message, reply *NoReply) error {
+	content := msg.Content
+
+	message := fmt.Sprintf("%s said to global chat: %s", msg.From, content)
+
+	for _, user := range s.Users {
+		if user == msg.From || user {
+			continue
+		} else {
+			s.MessageQ[user] = append(s.MessageQ[user], message)
+		}
+	}
+
+	return nil
+}
+
+func (s *ServerService) LogOut(username string, reply *string) error {
+	delete(s.MessageQ, username)
+
+	for user := range s.Users {
+		if s.Users[user] == username {
+			s.Users = append(s.Users[:user], s.Users[user+1:]...)
+		}
+	}
+
+	*reply = fmt.Sprintf("User %s has logged out", username)
+
+	for i := range s.MessageQ {
+		s.MessageQ[i] = append(s.MessageQ[i], *reply)
+	}
+
+	fmt.Printf("User %s has logged out", username)
+	return nil
+}
+
+func (s *ServerService) ReadMessages(username string, reply *[]string) error {
+	*reply = s.MessageQ[username]
+	s.MessageQ[username] = nil
+	return nil
+}
+
+func (s *ServerService) StopServer(args string, reply *NoReply) error {
+	s.Stop <- false
+
+	return nil
+}
+
+func (s *ServerService) CreateRoom(room Room, reply *string) error {
+	s.Rooms = append(s.Rooms, room)
+
+	*reply = fmt.Sprintf("user: %s created a room %s", room.Owner, room.Name)
+	return nil
+}
+
+func (s *ServerService) JoinRoom(params []string, reply *string) error {
+	roomName := params[1]
+	user := params[2]
+
+	for i := range s.Rooms {
+		if s.Rooms[i].Name == roomName {
+			s.Rooms[i].Users = append(s.Rooms[i].Users, user)
+		}
+	}
+
+	*reply = fmt.Sprintf("User %s added to a room %s", user, roomName)
+
+	return nil
+
+}
+
+func (s *ServerService) SendRoom(msg Message, reply *NoReply) error {
+	var room Room
+
+	for i := range s.Rooms {
+		if s.Rooms[i].Name == msg.Target {
+			room = s.Rooms[i]
+
+		} else {
+
+			return nil
+		}
+	}
+
+	message := fmt.Sprintf("%s sent to room %s: %s", msg.From, msg.Target, msg.Content)
+
+
+
+	for i := range room.Users {
+		s.MessageQ[room.Users[i]] = append(s.MessageQ[room.Users[i]], message)
+	}
+
+	return nil
+}
+
+func (s *ServerService) skipSender(username string) {
+	for _, user := range s.Users {
+		if user == username {
+			continue
+		} else {
+			s.MessageQ[user] = append(s.MessageQ[user], message)
+		}
+	}
+}
