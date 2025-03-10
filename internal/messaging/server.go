@@ -119,9 +119,10 @@ func isUserMuted(user string, mutedList []string) bool {
 func (s *ServerService) LogOut(username string, reply *string) error {
 	delete(s.MessageQ, username)
 
-	for user := range s.Users {
-		if s.Users[user] == username {
-			s.Users = append(s.Users[:user], s.Users[user+1:]...)
+	for i := 0; i < len(s.Users); i++ {
+		if s.Users[i] == username {
+			s.Users = append(s.Users[:i], s.Users[i+1:]...)
+			i--
 		}
 	}
 
@@ -131,7 +132,7 @@ func (s *ServerService) LogOut(username string, reply *string) error {
 		s.MessageQ[i] = append(s.MessageQ[i], *reply)
 	}
 
-	fmt.Printf("User %s has logged out", username)
+	fmt.Printf("User %s has logged out\n", username)
 	return nil
 }
 
@@ -174,19 +175,41 @@ func (s *ServerService) LeaveRoom(params []string, reply *string) error {
 	roomName := params[1]
 	user := params[2]
 
-	room := Room{}
-
+	roomIndex := -1
 	for i := range s.Rooms {
 		if s.Rooms[i].Name == roomName {
-			room = s.Rooms[i]
+			roomIndex = i
+			break
 		}
 	}
 
-	for i := range room.Users {
-		room.Users = append(room.Users[:i], room.Users[i+1:]...)
+	if roomIndex == -1 {
+		*reply = fmt.Sprintf("Room '%s' does not exist", roomName)
+		return fmt.Errorf("room '%s' not found", roomName)
 	}
 
-	*reply = fmt.Sprintf("User %s added to a room %s", user, roomName)
+	roomRef := &s.Rooms[roomIndex]
+
+	userIndex := -1
+	for i, roomUser := range roomRef.Users {
+		if roomUser == user {
+			userIndex = i
+			break
+		}
+	}
+
+	if userIndex == -1 {
+		*reply = fmt.Sprintf("User '%s' is not in room '%s'", user, roomName)
+		return fmt.Errorf("user '%s' not in room '%s'", user, roomName)
+	}
+
+	roomRef.Users = append(roomRef.Users[:userIndex], roomRef.Users[userIndex+1:]...)
+
+	for _, remainingUser := range roomRef.Users {
+		if s.MessageQ[remainingUser] != nil {
+			s.MessageQ[remainingUser] = append(s.MessageQ[remainingUser], fmt.Sprintf("User '%s' left room '%s'", user, roomName))
+		}
+	}
 
 	return nil
 }
@@ -229,6 +252,26 @@ func (s *ServerService) SendRoom(msg Message, reply *NoReply) error {
 	}
 
 	return nil
+}
+
+func (s *ServerService) DeleteRoom(roomMame, username string) error {
+
+	var room Room
+
+	for i := range s.Rooms {
+		if s.Rooms[i].Name == roomMame {
+			room = s.Rooms[i]
+		}
+	}
+
+	if username == room.Owner {
+		fmt.Println("Lmao ur the owner")
+	} else {
+		fmt.Println("Niigea")
+	}
+
+	return nil
+
 }
 
 func (s *ServerService) MuteGlobal(username string, reply *string) error {
