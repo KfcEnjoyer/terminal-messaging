@@ -31,13 +31,38 @@ func (us *UserService) GetConnection() (*rpc.Client, error) {
 	return client, nil
 }
 
-func (us *UserService) Register(username string) {
+func (us *UserService) Register(username string) error {
 	var reply string
 	if err := us.Client.Call("ServerService.Register", username, &reply); err != nil {
-		fmt.Println(err)
+
+		return err
+
+	}
+
+	if strings.Contains(reply, "cannot be") || strings.Contains(reply, "already exists") {
+		return fmt.Errorf(reply)
 	}
 
 	fmt.Println(reply)
+	return nil
+}
+
+func (c *UserService) GetUsernameFromUser() {
+	for {
+		fmt.Println("Enter your username:")
+		var username string
+		fmt.Scanln(&username)
+		username = strings.TrimSpace(username)
+		c.Username = username
+
+		err := c.Register(c.Username)
+		if err == nil {
+			return
+		}
+
+		fmt.Printf("Error: %s\n", err.Error())
+		fmt.Println("Please try again.")
+	}
 }
 
 func (us *UserService) GetUsers() {
@@ -243,7 +268,7 @@ func (us *UserService) LeaveRoom(params []string) {
 	if err := us.Client.Call("ServerService.LeaveRoom", params, &reply); err != nil {
 		fmt.Println(err)
 	}
-
+	fmt.Println(params)
 	fmt.Println(reply)
 }
 
