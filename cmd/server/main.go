@@ -1,6 +1,9 @@
 package main
 
-import "terminal-messaging/internal/messaging"
+import (
+	"fmt"
+	"terminal-messaging/internal/messaging"
+)
 
 func main() {
 	s := new(messaging.ServerService)
@@ -8,6 +11,6 @@ func main() {
 	s.Port = "localhost:8080"
 	s.Stop = make(chan bool, 1)
 	messaging.StartServer(s)
-
+	fmt.Println("Started server on " + s.Port)
 	<-s.Stop
 }
