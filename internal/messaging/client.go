@@ -17,15 +17,15 @@ type User interface {
 
 type UserService struct {
 	Username   string
-	Address    string
+	ServerAddr string
 	muteGlobal bool
 	Client     *rpc.Client
 }
 
 func (us *UserService) GetConnection() (*rpc.Client, error) {
-	client, err := rpc.DialHTTP("tcp", "localhost:8080")
+	client, err := rpc.DialHTTP("tcp", us.ServerAddr)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Error connecting to server at %s: %v\n", us.ServerAddr, err)
 		return nil, err
 	}
 	return client, nil
